@@ -37,6 +37,7 @@ function App(){
   const [erroLogin,setErroLogin]=useState(''),[carregandoLogin,setCarregandoLogin]=useState(false);
   const [pagina,setPagina]=useState('Dashboard'),[aberto,setAberto]=useState(false);
   const [unidades,setUnidades]=useState([]),[produtos,setProdutos]=useState([]),[metas,setMetas]=useState([]),[vendas,setVendas]=useState([]);
+  const [biGerencial,setBiGerencial]=useState(null);
   const [carregando,setCarregando]=useState(false),[erroDados,setErroDados]=useState(''),[aviso,setAviso]=useState('');
   const [periodo,setPeriodo]=useState(hoje().slice(0,7));
   const [form,setForm]=useState({unidade_id:'',produto_id:'',tipo_venda:'INTERNA',valor:'',data_venda:hoje(),cliente_nome:'',placa:''});
@@ -103,16 +104,17 @@ function App(){
     if(!perfil)return;
     setCarregando(true);setErroDados('');
     // Consultas protegidas pelas políticas RLS do Supabase.
-    const [ru,rp,rm,rv]=await Promise.all([
+    const [ru,rp,rm,rv,rbi]=await Promise.all([
       supabase.from('unidades').select('id,nome').order('nome'),
       supabase.from('produtos').select('id,nome,ativo').order('nome'),
       supabase.from('metas').select('id,unidade_id,data_inicio,data_fim,meta_1,meta_2,meta_3,meta_4').order('data_inicio',{ascending:false}).limit(1000),
-      supabase.from('vendas').select('id,unidade_id,vendedor_id,produto_id,data_venda,tipo_venda,valor,percentual_comissao,valor_comissao,cliente_nome,placa').gte('data_venda',`${periodo}-01`).lte('data_venda',ultimoDia(periodo)).order('data_venda',{ascending:false}).limit(1000)
+      supabase.from('vendas').select('id,unidade_id,vendedor_id,produto_id,data_venda,tipo_venda,valor,percentual_comissao,valor_comissao,cliente_nome,placa').gte('data_venda',`${periodo}-01`).lte('data_venda',ultimoDia(periodo)).order('data_venda',{ascending:false}).limit(1000),
+      periodo==='2026-10' ? supabase.from('bi_gerencial_v2_com_saldos').select('*') : Promise.resolve({data:null,error:null})
     ]);
-    const falhas=[ru,rp,rm,rv].filter(r=>r.error).map(r=>r.error.message);
+    const falhas=[ru,rp,rm,rv,rbi].filter(r=>r.error).map(r=>r.error.message);
     if(falhas.length)setErroDados([...new Set(falhas)].join(' | '));
     else {
-      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);
+      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);setBiGerencial(periodo==='2026-10'?(rbi.data||[]):null);
       setForm(f=>({...f,unidade_id:f.unidade_id||(ru.data?.[0]?.id||''),produto_id:f.produto_id||(rp.data?.find(p=>p.ativo)?.id||'')}));
       if((rv.data||[]).length===1000)setAviso('Há pelo menos 1.000 vendas neste período. A consulta está limitada; o total pode estar incompleto.');
     }
@@ -135,7 +137,20 @@ function App(){
     const alvo=Number(meta?.meta_1||0);
     return {id:u.id,nome:u.nome,meta:alvo,realizado,falta:Math.max(0,alvo-realizado),percentual:alvo?realizado/alvo*100:0,temMeta:!!meta};
   }),[unidades,metasAtivas,vendas]);
-  const totalMeta=desempenho.reduce((s,x)=>s+x.meta,0),totalVendas=vendas.reduce((s,x)=>s+Number(x.valor||0),0);
+  // O BI de outubro usa os saldos parciais consolidados, sem criar vendas fictícias.
+  // Para outros meses, conserva o comportamento anterior de vendas detalhadas.
+  const linhasBI=biGerencial && periodo==='2026-10' ? biGerencial : null;
+  const desempenhoBI=linhasBI ? linhasBI.map(x=>({
+    id:x.unidade_id,nome:x.unidade,meta:Number(x.meta_1||0),
+    realizado:Number(x.realizado_gerencial||0),falta:Number(x.falta_meta_1_gerencial||0),
+    percentual:Number(x.atingimento_gerencial_pct||0),temMeta:x.meta_1!=null,
+    necessario:x.necessario_por_dia_gerencial,dias:x.dias_uteis_restantes,
+    status:x.status_gerencial,origem:x.origem_realizado,
+    inicio:x.data_inicio,fim:x.data_fim,
+    meta2:x.meta_2,meta3:x.meta_3,meta4:x.meta_4
+  })) : desempenho;
+  const totalMeta=desempenhoBI.reduce((s,x)=>s+x.meta,0),totalVendas=desempenhoBI.reduce((s,x)=>s+x.realizado,0);
+  const corStatus=st=>st==='META ATINGIDA'||st==='TRANQUILO'?'text-green-300':st==='ATENÇÃO'?'text-yellow-300':st==='URGENTE'?'text-red-300':'text-[#aaa]';
   const evolucao=useMemo(()=>{const porDia={};vendas.forEach(v=>porDia[v.data_venda]=(porDia[v.data_venda]||0)+Number(v.valor||0));let acum=0;return Object.entries(porDia).sort(([a],[b])=>a.localeCompare(b)).map(([data,valor])=>({data,acumulado:(acum+=valor)}));},[vendas]);
   const resumoProdutos=useMemo(()=>produtos.map(p=>{const itens=vendas.filter(v=>v.produto_id===p.id);return {nome:p.nome,quantidade:itens.length,total:itens.reduce((s,v)=>s+Number(v.valor||0),0)};}).filter(p=>p.quantidade).sort((a,b)=>b.total-a.total),[vendas,produtos]);
   async function salvar(e){
@@ -166,7 +181,7 @@ function App(){
     <main className="p-5 md:p-8 space-y-6 max-w-[1500px] mx-auto">
       {erroDados&&<div role="alert" className="rounded-xl bg-red-950/40 border border-red-700 text-red-200 p-4 flex gap-2"><AlertCircle/>{erroDados}</div>}
       {aviso&&<div role="status" className="rounded-xl bg-[#30291b] text-[#f3d59d] border border-[#6a5129] p-4">{aviso}</div>}
-      {pagina==='Dashboard'&&<><div className="flex justify-between flex-wrap gap-4 items-center"><p className="text-[#aaa]">Dados reais acessíveis à sua conta · {periodo}</p><button onClick={()=>navegar('Nova Venda')} className="bg-[#d9a441] text-black font-bold px-5 py-3 rounded-xl flex gap-2 items-center"><Plus size={18}/>Nova venda</button></div><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">{card('Meta total das unidades visíveis',brl(totalMeta))}{card('Realizado no mês',brl(totalVendas))}{card('Atingimento',totalMeta?percent(totalVendas/totalMeta*100):'—')}{card('Falta para a meta',brl(Math.max(totalMeta-totalVendas,0)))}</div><Caixa titulo="Desempenho por unidade"><Tabela cabecalho={['Unidade','Meta','Realizado','Atingimento','Falta']} linhas={desempenho.map(x=>[x.nome,x.temMeta?brl(x.meta):'Sem meta',brl(x.realizado),x.temMeta?percent(x.percentual):'—',x.temMeta?brl(x.falta):'—'])}/></Caixa><p className="text-[#999] text-xs">Metas são selecionadas por sobreposição com o mês; unidades com ciclos diferentes podem exigir uma visão por período de fechamento.</p></>}
+      {pagina==='Dashboard'&&<><div className="flex justify-between flex-wrap gap-4 items-center"><p className="text-[#aaa]">{linhasBI?'BI Gerencial · saldos parciais de outubro + vendas conciliadas':'Vendas detalhadas · '+periodo}</p><button onClick={()=>navegar('Nova Venda')} className="bg-[#d9a441] text-black font-bold px-5 py-3 rounded-xl flex gap-2 items-center"><Plus size={18}/>Nova venda</button></div><div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">{card('Meta total',brl(totalMeta))}{card('Realizado gerencial',brl(totalVendas))}{card('Atingimento',totalMeta?percent(totalVendas/totalMeta*100):'—')}{card('Falta para meta 1',brl(Math.max(totalMeta-totalVendas,0)))}</div><Caixa titulo="Desempenho por unidade"><Tabela cabecalho={['Unidade','Meta 1','Realizado','Atingimento','Falta','Dias úteis','Necessário/dia','Status']} linhas={desempenhoBI.map(x=>[x.nome,x.temMeta?brl(x.meta):'Sem meta',brl(x.realizado),x.temMeta?percent(x.percentual):'—',x.temMeta?brl(x.falta):'—',x.dias??'—',x.necessario==null?'—':brl(x.necessario),<span className={`font-bold ${corStatus(x.status)}`}>{x.status||'—'}</span>])}/></Caixa>{linhasBI&&<><Caixa titulo="Metas adicionais e ciclos de fechamento"><Tabela cabecalho={['Unidade','Início','Fechamento','Meta 2','Meta 3','Meta 4','Origem do realizado']} linhas={desempenhoBI.map(x=>[x.nome,x.inicio||'—',x.fim||'—',x.meta2==null?'—':brl(x.meta2),x.meta3==null?'—':brl(x.meta3),x.meta4==null?'—':brl(x.meta4),x.origem])}/></Caixa><p className="text-[#999] text-xs">Saldos informados em 16/10/2026. O BI usa o maior valor entre o saldo parcial e as vendas detalhadas do ciclo para evitar somar duas vezes o histórico; é necessário conciliar os lançamentos para obter totais posteriores exatos. Dias úteis consideram segunda a sexta, sem feriados.</p></>}{!linhasBI&&<p className="text-[#999] text-xs">Fora de outubro de 2026, esta tela mostra apenas as vendas detalhadas cadastradas.</p>}</>}
       {pagina==='Nova Venda'&&<Caixa titulo="Registrar venda real"><p className="text-[#aaa] text-sm mb-6">Ao salvar, o registro será enviado ao Supabase. O vendedor será a conta conectada; a comissão é calculada no banco.</p><form onSubmit={salvar} className="grid grid-cols-1 md:grid-cols-2 gap-5"><label>Unidade<select required className={`${campo} mt-2`} value={form.unidade_id} onChange={e=>setForm({...form,unidade_id:e.target.value})}><option value="">Selecione</option>{unidades.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}</select></label><label>Produto<select required className={`${campo} mt-2`} value={form.produto_id} onChange={e=>setForm({...form,produto_id:e.target.value})}><option value="">Selecione</option>{produtos.filter(p=>p.ativo).map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select></label><label>Tipo de venda<select className={`${campo} mt-2`} value={form.tipo_venda} onChange={e=>setForm({...form,tipo_venda:e.target.value})}>{['INTERNA','EXTERNA','PPF'].map(t=><option key={t}>{t}</option>)}</select></label><label>Data<input required type="date" className={`${campo} mt-2`} value={form.data_venda} onChange={e=>setForm({...form,data_venda:e.target.value})}/></label><label>Valor (R$)<input required min="0.01" step="0.01" type="number" className={`${campo} mt-2`} value={form.valor} onChange={e=>setForm({...form,valor:e.target.value})}/></label><div className="rounded-xl bg-[#30291b] p-4"><p className="text-[#bbb]">Comissão estimada ({form.tipo_venda==='EXTERNA'?'5':'2'}%)</p><b className="text-2xl">{brl((Number(form.valor)||0)*(form.tipo_venda==='EXTERNA'?0.05:0.02))}</b></div><label>Cliente (opcional)<input className={`${campo} mt-2`} maxLength={150} value={form.cliente_nome} onChange={e=>setForm({...form,cliente_nome:e.target.value})}/></label><label>Placa (opcional)<input className={`${campo} mt-2`} maxLength={12} value={form.placa} onChange={e=>setForm({...form,placa:e.target.value})}/></label><button disabled={salvando} className="md:col-span-2 bg-[#d9a441] text-black font-bold rounded-xl py-3 disabled:opacity-50">{salvando?'Salvando...':'Salvar venda no Supabase'}</button></form></Caixa>}
       {pagina==='Vendas'&&<Caixa titulo="Vendas registradas no período"><Tabela cabecalho={['Data','Unidade','Produto','Tipo','Valor','Comissão']} linhas={vendas.map(v=>[v.data_venda,mapaUnidades[v.unidade_id]||v.unidade_id,mapaProdutos[v.produto_id]||v.produto_id,v.tipo_venda,brl(v.valor),brl(v.valor_comissao)])}/></Caixa>}
       {pagina==='Metas'&&<Caixa titulo="Metas do Supabase"><Tabela cabecalho={['Unidade','Início','Fim','Meta 1','Meta 2','Meta 3','Meta 4']} linhas={[...metasAtivas.values()].map(m=>[mapaUnidades[m.unidade_id]||m.unidade_id,m.data_inicio,m.data_fim,brl(m.meta_1),m.meta_2==null?'—':brl(m.meta_2),m.meta_3==null?'—':brl(m.meta_3),m.meta_4==null?'—':brl(m.meta_4)])}/></Caixa>}

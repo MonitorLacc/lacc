@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -41,25 +41,56 @@ function App(){
   const [periodo,setPeriodo]=useState(hoje().slice(0,7));
   const [form,setForm]=useState({unidade_id:'',produto_id:'',tipo_venda:'INTERNA',valor:'',data_venda:hoje(),cliente_nome:'',placa:''});
   const [salvando,setSalvando]=useState(false);
+  const [tentativaPerfil,setTentativaPerfil]=useState(0);
+  const usuarioAtualRef=useRef(null);
   useEffect(()=>{
     if(!supabase){setIniciando(false);return;}
     let ativo=true;
-    supabase.auth.getSession().then(({data,error})=>{if(ativo){if(error)setErroLogin(error.message);setSessao(data?.session||null);setIniciando(false);}});
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{if(ativo){setSessao(s);setPerfil(null);setErroDados('');}});
+    // Renovar o token não deve apagar o perfil e bloquear a interface.
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((evento,novaSessao)=>{
+      if(!ativo)return;
+      const novoId=novaSessao?.user?.id||null;
+      if(usuarioAtualRef.current!==novoId){
+        usuarioAtualRef.current=novoId;
+        setPerfil(null);
+        setErroDados('');
+      }
+      setSessao(novaSessao);
+      setIniciando(false);
+    });
+    supabase.auth.getSession()
+      .then(({data,error})=>{
+        if(!ativo)return;
+        if(error)setErroLogin(error.message);
+        if(usuarioAtualRef.current===null && data?.session?.user?.id){
+          usuarioAtualRef.current=data.session.user.id;
+          setSessao(data.session);
+        }
+      })
+      .catch(error=>{if(ativo)setErroLogin(`Falha ao verificar sessão: ${error.message}`);})
+      .finally(()=>{if(ativo)setIniciando(false);});
     return ()=>{ativo=false;subscription.unsubscribe();};
   },[]);
   useEffect(()=>{
     if(!sessao?.user?.id){setPerfil(null);return;}
     let ativo=true;
+    setErroDados('');
+    const timer=setTimeout(()=>{
+      if(ativo)setErroDados('A validação está demorando. Verifique sua conexão e clique em Tentar novamente.');
+    },12000);
     (async()=>{
-      const {data,error}=await supabase.from('usuarios').select('id,nome,cargo,status').eq('id',sessao.user.id).maybeSingle();
-      if(!ativo)return;
-      if(error){setErroDados(`Perfil: ${error.message}`);return;}
-      if(!data||data.status!=='ATIVO'){setErroDados('Seu usuário não possui perfil ativo. Solicite liberação ao administrador.');return;}
-      setPerfil(data);
+      try{
+        const {data,error}=await supabase.from('usuarios').select('id,nome,cargo,status').eq('id',sessao.user.id).maybeSingle();
+        if(!ativo)return;
+        if(error){setErroDados(`Perfil: ${error.message}`);return;}
+        if(!data||data.status!=='ATIVO'){setErroDados('Seu usuário não possui perfil ativo. Solicite liberação ao administrador.');return;}
+        setPerfil(data);
+        setErroDados('');
+      }catch(error){if(ativo)setErroDados(`Não foi possível validar seu perfil: ${error.message}`);}
+      finally{clearTimeout(timer);}
     })();
-    return ()=>{ativo=false;};
-  },[sessao?.user?.id]);
+    return ()=>{ativo=false;clearTimeout(timer);};
+  },[sessao?.user?.id,tentativaPerfil]);
   async function entrar(email,senha){
     if(!supabase)return;
     setCarregandoLogin(true);setErroLogin('');
@@ -125,7 +156,7 @@ function App(){
   if(!supabase)return <div className="min-h-screen bg-[#111] text-white flex items-center justify-center p-6"><div className="max-w-xl bg-[#222] rounded-2xl p-8 border border-[#555]"><h1 className="text-xl font-bold mb-4">LACC V2 · Configuração pendente</h1><p>Configure <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code> nas variáveis de ambiente da Vercel e publique novamente.</p><p className="text-[#d9a441] mt-4">Não use a chave service_role.</p></div></div>;
   if(iniciando)return <div className="min-h-screen bg-[#111] text-white flex items-center justify-center">Carregando LACC V2...</div>;
   if(!sessao)return <Login entrar={entrar} carregando={carregandoLogin} erro={erroLogin}/>;
-  if(!perfil)return <div className="min-h-screen bg-[#111] text-white flex items-center justify-center p-6"><div className="max-w-md bg-[#222] rounded-2xl p-8"><h2 className="font-bold text-xl">Validando acesso</h2><p className="text-[#ccc] my-5">{erroDados||'Buscando seu perfil...'}</p><button onClick={sair} className="bg-[#d9a441] text-black font-bold rounded-xl px-5 py-3">Sair</button></div></div>;
+  if(!perfil)return <div className="min-h-screen bg-[#111] text-white flex items-center justify-center p-6"><div className="max-w-md bg-[#222] rounded-2xl p-8"><h2 className="font-bold text-xl">Validando acesso</h2><p className="text-[#ccc] my-5">{erroDados||'Buscando seu perfil...'}</p><div className="flex flex-wrap gap-3"><button onClick={()=>{setErroDados('');setTentativaPerfil(n=>n+1);}} className="bg-[#d9a441] text-black font-bold rounded-xl px-5 py-3">Tentar novamente</button><button onClick={sair} className="bg-[#444] text-white font-bold rounded-xl px-5 py-3">Sair</button></div></div></div>;
   function navegar(p){setPagina(p);setAberto(false);setAviso('');}
   const card=(titulo,valor)=><div className="bg-[#222] border border-[#383838] rounded-2xl p-5"><p className="text-[#aaa] text-sm">{titulo}</p><p className="text-2xl font-bold mt-3">{valor}</p></div>;
   return <div className="min-h-screen bg-[#151515] text-white">

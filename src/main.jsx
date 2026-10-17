@@ -75,6 +75,7 @@ function App(){
   useEffect(()=>{try{localStorage.setItem('lacc-tema',modoNoturno?'escuro':'claro')}catch{}},[modoNoturno]);
   const [unidades,setUnidades]=useState([]),[produtos,setProdutos]=useState([]),[metas,setMetas]=useState([]),[vendas,setVendas]=useState([]);
   const [biGerencial,setBiGerencial]=useState(null);
+  const [historicoMensal,setHistoricoMensal]=useState(null);
   const [carregando,setCarregando]=useState(false),[erroDados,setErroDados]=useState(''),[aviso,setAviso]=useState('');
   const [periodo,setPeriodo]=useState(hoje().slice(0,7));
   const [form,setForm]=useState({unidade_id:'',produto_id:'',tipo_venda:'INTERNA',valor:'',data_venda:hoje(),cliente_nome:'',placa:''});
@@ -141,17 +142,18 @@ function App(){
     if(!perfil)return;
     setCarregando(true);setErroDados('');
     // Consultas protegidas pelas políticas RLS do Supabase.
-    const [ru,rp,rm,rv,rbi]=await Promise.all([
+    const [ru,rp,rm,rv,rbi,rh]=await Promise.all([
       supabase.from('unidades').select('id,nome').order('nome'),
       supabase.from('produtos').select('id,nome,ativo').order('nome'),
       supabase.from('metas').select('id,unidade_id,data_inicio,data_fim,meta_1,meta_2,meta_3,meta_4').order('data_inicio',{ascending:false}).limit(1000),
       supabase.from('vendas').select('id,unidade_id,vendedor_id,produto_id,data_venda,tipo_venda,valor,percentual_comissao,valor_comissao,cliente_nome,placa').gte('data_venda',`${periodo}-01`).lte('data_venda',ultimoDia(periodo)).order('data_venda',{ascending:false}).limit(1000),
-      periodo==='2026-10' ? supabase.from('bi_gerencial_v2_com_saldos').select('*') : Promise.resolve({data:null,error:null})
+      periodo==='2026-10' ? supabase.from('bi_gerencial_v2_com_saldos').select('*') : Promise.resolve({data:null,error:null}),
+      periodo==='2026-09' ? supabase.from('bi_historico_mensal').select('competencia,unidade_id,unidade,realizado,observacoes').eq('competencia',periodo) : Promise.resolve({data:null,error:null})
     ]);
-    const falhas=[ru,rp,rm,rv,rbi].filter(r=>r.error).map(r=>r.error.message);
+    const falhas=[ru,rp,rm,rv,rbi,rh].filter(r=>r.error).map(r=>r.error.message);
     if(falhas.length)setErroDados([...new Set(falhas)].join(' | '));
     else {
-      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);setBiGerencial(periodo==='2026-10'?(rbi.data||[]):null);
+      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);setBiGerencial(periodo==='2026-10'?(rbi.data||[]):null);setHistoricoMensal(periodo==='2026-09'?(rh.data||[]):null);
       setForm(f=>({...f,unidade_id:f.unidade_id||(ru.data?.[0]?.id||''),produto_id:f.produto_id||(rp.data?.find(p=>p.ativo)?.id||'')}));
       if((rv.data||[]).length===1000)setAviso('Há pelo menos 1.000 vendas neste período. A consulta está limitada; o total pode estar incompleto.');
     }
@@ -177,6 +179,9 @@ function App(){
   // O BI de outubro usa os saldos parciais consolidados, sem criar vendas fictícias.
   // Para outros meses, conserva o comportamento anterior de vendas detalhadas.
   const linhasBI=biGerencial && periodo==='2026-10' ? biGerencial : null;
+  // Fechamentos históricos auditados: não são vendas detalhadas nem alteram outubro.
+  const metasSetembro={'COMERCIAL O. GUARAPUAVA':17900,'FIAT/JEEP GUARAPUAVA':19800,'HYUNDAI GUARAPUAVA':15400,'MITSUBISHI SEVEN':15400,'PROVANCE PG':15400,'HYUNDAI PG':19000,'JEEP PG':19300,'NICENTER LONDRINA':18000,'FIAT LONDRINA':33000,'LOVAT MARINGA':19300};
+  const historicoBI=periodo==='2026-09'&&historicoMensal?.length ? historicoMensal.map(x=>{const meta=metasSetembro[x.unidade]||0,realizado=Number(x.realizado||0);return {id:x.unidade_id,nome:x.unidade,meta,realizado,falta:Math.max(0,meta-realizado),percentual:meta?realizado/meta*100:0,temMeta:meta>0,status:realizado>=meta?'META ATINGIDA':'ENCERRADO',origem:'FECHAMENTO VALIDADO',necessario:null,dias:0,meta2:null,meta3:null,meta4:null};}) : null;
   const desempenhoBI=linhasBI ? linhasBI.map(x=>({
     id:x.unidade_id,nome:x.unidade,meta:Number(x.meta_1||0),
     realizado:Number(x.realizado_gerencial||0),falta:Number(x.falta_meta_1_gerencial||0),
@@ -185,7 +190,7 @@ function App(){
     status:x.status_gerencial,origem:x.origem_realizado,
     inicio:x.data_inicio,fim:x.data_fim,
     meta2:x.meta_2,meta3:x.meta_3,meta4:x.meta_4
-  })) : desempenho;
+  })) : (historicoBI || desempenho);
   const totalMeta=desempenhoBI.reduce((s,x)=>s+x.meta,0),totalVendas=desempenhoBI.reduce((s,x)=>s+x.realizado,0);
   const corStatus=st=>st==='META ATINGIDA'||st==='TRANQUILO'?'text-green-300':st==='ATENÇÃO'?'text-yellow-300':st==='URGENTE'?'text-red-300':'text-[#aaa]';
   const evolucao=useMemo(()=>{const porDia={};vendas.forEach(v=>porDia[v.data_venda]=(porDia[v.data_venda]||0)+Number(v.valor||0));let acum=0;return Object.entries(porDia).sort(([a],[b])=>a.localeCompare(b)).map(([data,valor])=>({data,acumulado:(acum+=valor)}));},[vendas]);
@@ -222,7 +227,7 @@ function App(){
       {erroDados&&<div role="alert" className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 p-4 flex gap-2"><AlertCircle/>{erroDados}</div>}
       {aviso&&<div role="status" className="rounded-xl bg-[#fff8e9] text-[#806022] border border-[#ecd9b3] p-4">{aviso}</div>}
       {pagina==='Dashboard'&&<>
-        <div className="flex justify-between flex-wrap gap-4 items-center"><div><h2 className="text-[29px] tracking-tight font-semibold text-[#292824]">Visão geral</h2><p className="text-[#8a8a86] text-sm mt-1">{linhasBI?'Indicadores comerciais e desempenho da operação · dados reais':'Vendas detalhadas · '+periodo}</p></div><button onClick={()=>navegar('Nova Venda')} className="bg-[#e3b66c] hover:bg-[#e9c587] text-[#302719] font-semibold px-5 py-3 rounded-xl flex gap-2 items-center shadow-sm"><Plus size={18}/>Nova venda</button></div>
+        <div className="flex justify-between flex-wrap gap-4 items-center"><div><h2 className="text-[29px] tracking-tight font-semibold text-[#292824]">Visão geral</h2><p className="text-[#8a8a86] text-sm mt-1">{linhasBI?'Indicadores comerciais e desempenho da operação · dados reais':historicoBI?'Fechamento validado · setembro/2026 · películas e PPF fora da meta':'Vendas detalhadas · '+periodo}</p></div><button onClick={()=>navegar('Nova Venda')} className="bg-[#e3b66c] hover:bg-[#e9c587] text-[#302719] font-semibold px-5 py-3 rounded-xl flex gap-2 items-center shadow-sm"><Plus size={18}/>Nova venda</button></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">{card('Meta total',brl(totalMeta))}{card('Realizado gerencial',brl(totalVendas))}{card('Atingimento',totalMeta?percent(totalVendas/totalMeta*100):'—')}{card('Falta para meta 1',brl(Math.max(totalMeta-totalVendas,0)))}</div>
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           <div className="xl:col-span-3"><Caixa titulo="Meta x realizado por unidade" extra={<span className="text-xs text-[#8a8a86]">Valores em R$</span>}>

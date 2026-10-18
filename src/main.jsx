@@ -199,7 +199,7 @@ function App(){
   const busca=normalizar(filtroBusca.trim());
   const unidadeOk=nome=>!filtroUnidade||nome===filtroUnidade;
   const buscaOk=(...campos)=>!busca||campos.some(c=>normalizar(c).includes(busca));
-  const desempenhoFiltrado=desempenhoFiltrado.filter(x=>unidadeOk(x.nome)&&buscaOk(x.nome)&&(!filtroSituacao||x.status===filtroSituacao));
+  const desempenhoFiltrado=desempenhoBI.filter(x=>unidadeOk(x.nome)&&buscaOk(x.nome)&&(!filtroSituacao||x.status===filtroSituacao));
   const historicoFiltrado=(historicoMensal||[]).filter(h=>unidadeOk(h.unidade)&&buscaOk(h.unidade));
   // Datas históricas podem vir como AAAA-MM-DD, DD/MM/AAAA ou data/hora.
   // Datas ausentes/inválidas não são incluídas quando um intervalo está ativo.
@@ -213,10 +213,10 @@ function App(){
   const totalMeta=desempenhoFiltrado.reduce((s,x)=>s+x.meta,0),totalVendas=desempenhoFiltrado.reduce((s,x)=>s+x.realizado,0);
   const corStatus=st=>st==='META ATINGIDA'||st==='TRANQUILO'?'text-green-300':st==='ATENÇÃO'?'text-yellow-300':st==='URGENTE'?'text-red-300':'text-[#aaa]';
   const evolucao=useMemo(()=>{const porDia={};vendasFiltradas.forEach(v=>porDia[v.data_venda]=(porDia[v.data_venda]||0)+Number(v.valor||0));let acum=0;return Object.entries(porDia).sort(([a],[b])=>a.localeCompare(b)).map(([data,valor])=>({data,acumulado:(acum+=valor)}));},[vendasFiltradas]);
-  const rankingBI=useMemo(()=>desempenhoFiltrado.filter(x=>x.temMeta&&x.meta>0).sort((a,b)=>b.percentual-a.percentual),[desempenhoBI]);
-  const comparativoBI=useMemo(()=>desempenhoFiltrado.filter(x=>x.temMeta&&x.meta>0).map(x=>({nome:x.nome.replace(' GUARAPUAVA',' GUA.').replace(' LONDRINA',' LON.').replace(' MARINGA',' MAR.'),meta:x.meta,realizado:x.realizado})),[desempenhoBI]);
+  const rankingBI=useMemo(()=>desempenhoFiltrado.filter(x=>x.temMeta&&x.meta>0).sort((a,b)=>b.percentual-a.percentual),[desempenhoFiltrado]);
+  const comparativoBI=useMemo(()=>desempenhoFiltrado.filter(x=>x.temMeta&&x.meta>0).map(x=>({nome:x.nome.replace(' GUARAPUAVA',' GUA.').replace(' LONDRINA',' LON.').replace(' MARINGA',' MAR.'),meta:x.meta,realizado:x.realizado})),[desempenhoFiltrado]);
   const corBarra=valor=>valor>=100?'#4ade80':valor>=50?'#facc15':'#f87171';
-  const resumoProdutos=useMemo(()=>produtos.map(p=>{const itens=vendasFiltradas.filter(v=>v.produto_id===p.id);return {nome:p.nome,quantidade:itens.length,total:itens.reduce((s,v)=>s+Number(v.valor||0),0)};}).filter(p=>p.quantidade).sort((a,b)=>b.total-a.total),[vendas,produtos]);
+  const resumoProdutos=useMemo(()=>produtos.map(p=>{const itens=vendasFiltradas.filter(v=>v.produto_id===p.id);return {nome:p.nome,quantidade:itens.length,total:itens.reduce((s,v)=>s+Number(v.valor||0),0)};}).filter(p=>p.quantidade).sort((a,b)=>b.total-a.total),[vendasFiltradas,produtos,filtroProduto,filtroBusca]);
   async function salvar(e){
     e.preventDefault();setAviso('');
     const valor=Number(form.valor);

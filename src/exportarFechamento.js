@@ -12,7 +12,7 @@ export function prepararFechamento({fechamento,unidade,vendas,produtos,historico
   if(!fechamento||fechamento.status!=='CONFERIDO')throw new Error('Somente fechamentos conferidos podem ser exportados.');
   const inicio=fechamento.data_inicio, fim=fechamento.data_fim;
   const vendasUnidade=(vendas||[]).filter(v=>v.unidade_id===fechamento.unidade_id&&v.data_venda>=inicio&&v.data_venda<=fim);
-  const historicosUnidade=(historicos||[]).filter(v=>v.unidade_nome===unidade&&dataISO(v.data_fonte)>=inicio&&dataISO(v.data_fonte)<=fim);
+  const historicosUnidade=(historicos||[]).filter(v=>v.unidade_nome===unidade);
   const nomes=Object.fromEntries((produtos||[]).map(p=>[p.id,p.nome]));
   const incompletos=[];
   const itens=[

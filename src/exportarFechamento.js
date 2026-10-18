@@ -15,6 +15,7 @@ export function prepararFechamento({fechamento,unidade,vendas,produtos,historico
   const historicosUnidade=(historicos||[]).filter(v=>v.unidade_nome===unidade);
   const nomes=Object.fromEntries((produtos||[]).map(p=>[p.id,p.nome]));
   const incompletos=[];
+  const historicoPendente=inicio.startsWith('2026-09')?historicosUnidade.filter(v=>v.status_conferencia!=='CONFERIDO').length:0;
   const itens=[
     ...historicosUnidade.map(v=>({data:dataISO(v.data_fonte),produto:v.produto||'—',tipo:v.tipo||'—',quantidade:Number(v.quantidade??1),valor:arredondar(v.valor_historico),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.veiculo||'',cliente:v.cliente_nome||'',origem:v.status_conferencia==='AGRUPADO'?'Resumo por produto':'Histórico'})),
     ...vendasUnidade.map(v=>({data:v.data_venda,produto:nomes[v.produto_id]||'—',tipo:v.tipo_venda||'—',quantidade:1,valor:arredondar(v.valor),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.modelo_veiculo||'',cliente:v.cliente_nome||'',origem:'Venda individual'}))
@@ -25,11 +26,11 @@ export function prepararFechamento({fechamento,unidade,vendas,produtos,historico
   const resumo=[...agrupados.values()].sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'));
   const totalDetalhes=arredondar(itens.reduce((a,v)=>a+v.valor,0));
   const totalFechamento=arredondar(fechamento.valor_total);
-  return {unidade,inicio,fim,quantidade:fechamento.quantidade_vendas,totalFechamento,totalDetalhes,divergencia:arredondar(totalFechamento-totalDetalhes),interno:arredondar(fechamento.valor_interno),externo:arredondar(fechamento.valor_externo),ppf:arredondar(fechamento.valor_ppf),observacoes:fechamento.observacoes||'',itens,resumo,incompletos:incompletos.length};
+  return {unidade,inicio,fim,quantidade:fechamento.quantidade_vendas,totalFechamento,totalDetalhes,divergencia:arredondar(totalFechamento-totalDetalhes),interno:arredondar(fechamento.valor_interno),externo:arredondar(fechamento.valor_externo),ppf:arredondar(fechamento.valor_ppf),observacoes:fechamento.observacoes||'',itens,resumo,incompletos:incompletos.length,historicoPendente};
 }
 
 export function baixarFechamentoExcel(d){
-  const rascunho=!!(d.incompletos||!d.itens.length||Math.abs(d.divergencia)>0.009);
+  const rascunho=!!(d.incompletos||d.historicoPendente||!d.itens.length||Math.abs(d.divergencia)>0.009);
   const wb=XLSX.utils.book_new();
   const linhasResumo=[
     [rascunho?'LACC | PRÉVIA DE CONFERÊNCIA — NÃO ENVIAR':'LACC | FECHAMENTO CONFERIDO'],
@@ -37,6 +38,7 @@ export function baixarFechamentoExcel(d){
     ['Período',dataBR(d.inicio)+' a '+dataBR(d.fim)],
     ['Status',rascunho?'PRÉVIA INCOMPLETA — NÃO ENVIAR':'CONFERIDO'],
     ['Lançamentos sem OS/placa/modelo ou agrupados',d.incompletos],
+    ['Lançamentos históricos pendentes de revisão',d.historicoPendente||0],
     ['Quantidade de vendas',d.quantidade],
     ['Internas (R$)',d.interno],
     ['Externas (R$)',d.externo],
@@ -62,7 +64,7 @@ export function baixarFechamentoExcel(d){
 }
 
 export function baixarFechamentoPDF(d){
-  const rascunho=!!(d.incompletos||!d.itens.length||Math.abs(d.divergencia)>0.009);
+  const rascunho=!!(d.incompletos||d.historicoPendente||!d.itens.length||Math.abs(d.divergencia)>0.009);
   const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   doc.setFillColor(32,32,32);doc.rect(0,0,297,29,'F');
   doc.setTextColor(230,179,79);doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text(rascunho?'LACC | PRÉVIA — NÃO ENVIAR':'LACC | FECHAMENTO CONFERIDO',14,14);
@@ -73,7 +75,7 @@ export function baixarFechamentoPDF(d){
   doc.setFont('helvetica','bold');doc.text('TOTAL OFICIAL: '+dinheiro(d.totalFechamento),193,38);
   doc.setFont('helvetica','normal');
   doc.text('Internas: '+dinheiro(d.interno)+'   |   Externas: '+dinheiro(d.externo)+'   |   PPF: '+dinheiro(d.ppf),14,46);
-  if(rascunho){doc.setTextColor(170,44,32);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('PRÉVIA INCOMPLETA: '+d.incompletos+' registros sem dados individuais. Não enviar à concessionária.',14,52);doc.setTextColor(45,45,45);doc.setFont('helvetica','normal');}
+  if(rascunho){doc.setTextColor(170,44,32);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('PRÉVIA: '+d.incompletos+' registros incompletos; '+(d.historicoPendente||0)+' históricos pendentes. Não enviar.',14,52);doc.setTextColor(45,45,45);doc.setFont('helvetica','normal');}
   autoTable(doc,{startY:rascunho?58:53,head:[['Data','OS','Placa','Modelo','Cliente','Produto / Serviço','Tipo','Valor']],body:d.itens.map(x=>[dataBR(x.data),x.os,x.placa,x.modelo,x.cliente||'—',x.produto,x.tipo,dinheiro(x.valor)]),theme:'grid',headStyles:{fillColor:[42,42,42],textColor:[255,255,255]},styles:{fontSize:7,cellPadding:2,overflow:'linebreak'},margin:{left:10,right:10},columnStyles:{0:{cellWidth:21},1:{cellWidth:20},2:{cellWidth:21},3:{cellWidth:32},4:{cellWidth:35},5:{cellWidth:66},6:{cellWidth:25},7:{cellWidth:30,halign:'right'}}});
   let y=doc.lastAutoTable.finalY+8;
   if(y>180){doc.addPage();y=20;}

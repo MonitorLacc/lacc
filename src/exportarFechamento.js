@@ -19,7 +19,7 @@ export function prepararFechamento({fechamento,unidade,vendas,produtos,historico
     ...historicosUnidade.map(v=>({data:dataISO(v.data_fonte),produto:v.produto||'—',tipo:v.tipo||'—',quantidade:Number(v.quantidade??1),valor:arredondar(v.valor_historico),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.veiculo||'',cliente:v.cliente_nome||'',origem:v.status_conferencia==='AGRUPADO'?'Resumo por produto':'Histórico'})),
     ...vendasUnidade.map(v=>({data:v.data_venda,produto:nomes[v.produto_id]||'—',tipo:v.tipo_venda||'—',quantidade:1,valor:arredondar(v.valor),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.modelo_veiculo||'',cliente:v.cliente_nome||'',origem:'Venda individual'}))
   ];
-  for(const item of itens){if(item.quantidade!==1||!item.os.trim()||!item.placa.trim()||!item.modelo.trim()||!item.data||!item.produto||item.produto==='—')incompletos.push(item);}
+  for(const item of itens){if(item.quantidade!==1||(!String(item.tipo).toUpperCase().includes('INTERNA')&&!item.os.trim())||!item.placa.trim()||!item.modelo.trim()||!item.data||!item.produto||item.produto==='—')incompletos.push(item);}
   const agrupados=new Map();
   for(const item of itens){const chave=item.produto+'\u0000'+item.tipo;const anterior=agrupados.get(chave)||{produto:item.produto,tipo:item.tipo,quantidade:0,valor:0};anterior.quantidade+=item.quantidade;anterior.valor=arredondar(anterior.valor+item.valor);agrupados.set(chave,anterior);}
   const resumo=[...agrupados.values()].sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'));

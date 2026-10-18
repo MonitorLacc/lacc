@@ -14,19 +14,22 @@ export function prepararFechamento({fechamento,unidade,vendas,produtos,historico
   const vendasUnidade=(vendas||[]).filter(v=>v.unidade_id===fechamento.unidade_id&&v.data_venda>=inicio&&v.data_venda<=fim);
   const historicosUnidade=(historicos||[]).filter(v=>v.unidade_nome===unidade&&dataISO(v.data_fonte)>=inicio&&dataISO(v.data_fonte)<=fim);
   const nomes=Object.fromEntries((produtos||[]).map(p=>[p.id,p.nome]));
+  const incompletos=[];
   const itens=[
-    ...historicosUnidade.map(v=>({data:dataISO(v.data_fonte),produto:v.produto||'—',tipo:v.tipo||'—',quantidade:Number(v.quantidade??1),valor:arredondar(v.valor_historico),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.veiculo||'',origem:v.status_conferencia==='AGRUPADO'?'Resumo por produto':'Histórico'})),
-    ...vendasUnidade.map(v=>({data:v.data_venda,produto:nomes[v.produto_id]||'—',tipo:v.tipo_venda||'—',quantidade:1,valor:arredondar(v.valor),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.modelo_veiculo||'',origem:'Venda individual'}))
+    ...historicosUnidade.map(v=>({data:dataISO(v.data_fonte),produto:v.produto||'—',tipo:v.tipo||'—',quantidade:Number(v.quantidade??1),valor:arredondar(v.valor_historico),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.veiculo||'',cliente:v.cliente_nome||'',origem:v.status_conferencia==='AGRUPADO'?'Resumo por produto':'Histórico'})),
+    ...vendasUnidade.map(v=>({data:v.data_venda,produto:nomes[v.produto_id]||'—',tipo:v.tipo_venda||'—',quantidade:1,valor:arredondar(v.valor),os:v.ordem_servico||'',placa:v.placa||'',modelo:v.modelo_veiculo||'',cliente:v.cliente_nome||'',origem:'Venda individual'}))
   ];
+  for(const item of itens){if(item.quantidade!==1||!item.os.trim()||!item.placa.trim()||!item.modelo.trim()||!item.data||!item.produto||item.produto==='—')incompletos.push(item);}
   const agrupados=new Map();
   for(const item of itens){const chave=item.produto+'\u0000'+item.tipo;const anterior=agrupados.get(chave)||{produto:item.produto,tipo:item.tipo,quantidade:0,valor:0};anterior.quantidade+=item.quantidade;anterior.valor=arredondar(anterior.valor+item.valor);agrupados.set(chave,anterior);}
   const resumo=[...agrupados.values()].sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'));
   const totalDetalhes=arredondar(itens.reduce((a,v)=>a+v.valor,0));
   const totalFechamento=arredondar(fechamento.valor_total);
-  return {unidade,inicio,fim,quantidade:fechamento.quantidade_vendas,totalFechamento,totalDetalhes,divergencia:arredondar(totalFechamento-totalDetalhes),interno:arredondar(fechamento.valor_interno),externo:arredondar(fechamento.valor_externo),ppf:arredondar(fechamento.valor_ppf),observacoes:fechamento.observacoes||'',itens,resumo};
+  return {unidade,inicio,fim,quantidade:fechamento.quantidade_vendas,totalFechamento,totalDetalhes,divergencia:arredondar(totalFechamento-totalDetalhes),interno:arredondar(fechamento.valor_interno),externo:arredondar(fechamento.valor_externo),ppf:arredondar(fechamento.valor_ppf),observacoes:fechamento.observacoes||'',itens,resumo,incompletos:incompletos.length};
 }
 
 export function baixarFechamentoExcel(d){
+  if(d.incompletos||!d.itens.length||Math.abs(d.divergencia)>0.009)throw new Error('Fechamento sem detalhamento individual completo ou com diferença de valores.');
   const wb=XLSX.utils.book_new();
   const linhasResumo=[
     ['LACC | FECHAMENTO CONFERIDO'],
@@ -49,15 +52,16 @@ export function baixarFechamentoExcel(d){
   ws['!cols']=[{wch:42},{wch:26},{wch:18},{wch:18}];
   for(const linha of [6,7,8,9,10]){const cel=ws['B'+(linha+1)];if(cel&&cel.t==='n')cel.z='#,##0.00';}
   for(let i=14;i<linhasResumo.length;i++){const cel=ws['D'+(i+1)];if(cel&&cel.t==='n')cel.z='#,##0.00';}
-  XLSX.utils.book_append_sheet(wb,ws,'Fechamento');
-  const detalhes=[['Data','Produto','Tipo','Quantidade','Valor (R$)','OS','Placa','Modelo','Origem'],...d.itens.map(x=>[dataBR(x.data),x.produto,x.tipo,x.quantidade,x.valor,x.os,x.placa,x.modelo,x.origem])];
-  const wd=XLSX.utils.aoa_to_sheet(detalhes);wd['!cols']=[{wch:14},{wch:40},{wch:16},{wch:14},{wch:18},{wch:18},{wch:16},{wch:25},{wch:22}];
-  for(let i=2;i<=detalhes.length;i++){const c=wd['E'+i];if(c&&c.t==='n')c.z='#,##0.00';}
+  XLSX.utils.book_append_sheet(wb,ws,'Resumo');
+  const detalhes=[['Data','OS','Placa','Modelo','Cliente','Produto/Serviço','Tipo','Quantidade','Valor (R$)'],...d.itens.map(x=>[dataBR(x.data),x.os,x.placa,x.modelo,x.cliente,x.produto,x.tipo,x.quantidade,x.valor])];
+  const wd=XLSX.utils.aoa_to_sheet(detalhes);wd['!cols']=[{wch:14},{wch:18},{wch:16},{wch:25},{wch:26},{wch:40},{wch:16},{wch:14},{wch:18}];
+  for(let i=2;i<=detalhes.length;i++){const c=wd['I'+i];if(c&&c.t==='n')c.z='#,##0.00';}
   XLSX.utils.book_append_sheet(wb,wd,'Detalhamento');
   XLSX.writeFile(wb,'LACC_FECHAMENTO_'+seguro(d.unidade)+'_'+d.fim+'.xlsx');
 }
 
 export function baixarFechamentoPDF(d){
+  if(d.incompletos||!d.itens.length||Math.abs(d.divergencia)>0.009)throw new Error('Fechamento sem detalhamento individual completo ou com diferença de valores.');
   const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
   doc.setFillColor(32,32,32);doc.rect(0,0,297,29,'F');
   doc.setTextColor(230,179,79);doc.setFont('helvetica','bold');doc.setFontSize(17);doc.text('LACC | FECHAMENTO CONFERIDO',14,14);
@@ -68,14 +72,13 @@ export function baixarFechamentoPDF(d){
   doc.setFont('helvetica','bold');doc.text('TOTAL OFICIAL: '+dinheiro(d.totalFechamento),193,38);
   doc.setFont('helvetica','normal');
   doc.text('Internas: '+dinheiro(d.interno)+'   |   Externas: '+dinheiro(d.externo)+'   |   PPF: '+dinheiro(d.ppf),14,46);
-  autoTable(doc,{startY:53,head:[['Produto','Tipo','Quantidade','Valor']],body:d.resumo.map(x=>[x.produto,x.tipo,String(x.quantidade),dinheiro(x.valor)]),theme:'grid',headStyles:{fillColor:[42,42,42],textColor:[255,255,255]},styles:{fontSize:9,cellPadding:2.5},columnStyles:{0:{cellWidth:125},1:{cellWidth:52},2:{cellWidth:36,halign:'center'},3:{halign:'right'}}});
+  autoTable(doc,{startY:53,head:[['Data','OS','Placa','Modelo','Cliente','Produto / Serviço','Tipo','Valor']],body:d.itens.map(x=>[dataBR(x.data),x.os,x.placa,x.modelo,x.cliente||'—',x.produto,x.tipo,dinheiro(x.valor)]),theme:'grid',headStyles:{fillColor:[42,42,42],textColor:[255,255,255]},styles:{fontSize:7,cellPadding:2,overflow:'linebreak'},margin:{left:10,right:10},columnStyles:{0:{cellWidth:21},1:{cellWidth:20},2:{cellWidth:21},3:{cellWidth:32},4:{cellWidth:35},5:{cellWidth:66},6:{cellWidth:25},7:{cellWidth:30,halign:'right'}}});
   let y=doc.lastAutoTable.finalY+8;
-  if(y>175){doc.addPage();y=20;}
+  if(y>180){doc.addPage();y=20;}
   doc.setFontSize(9);
-  doc.text('Soma dos produtos: '+dinheiro(d.totalDetalhes),14,y);
+  doc.text('TOTAL DAS VENDAS DETALHADAS: '+dinheiro(d.totalDetalhes),14,y);
   if(Math.abs(d.divergencia)>0.009){doc.setTextColor(145,63,24);doc.text('Diferença em relação ao fechamento: '+dinheiro(d.divergencia),115,y);doc.setTextColor(45,45,45);}
   if(d.observacoes){const obs=doc.splitTextToSize('Observações: '+d.observacoes,268);doc.text(obs,14,y+7);}
-  doc.setFontSize(8);doc.setTextColor(115,115,115);
-  doc.text('Relatório gerado pelo Monitor LACC V2. Dados conforme fechamento conferido e produtos disponíveis no sistema.',14,195);
+  const paginas=doc.getNumberOfPages();for(let p=1;p<=paginas;p++){doc.setPage(p);doc.setFontSize(8);doc.setTextColor(115,115,115);doc.text('LACC V2 | Conferência de vendas individuais | Página '+p+' de '+paginas,14,195);}
   doc.save('LACC_FECHAMENTO_'+seguro(d.unidade)+'_'+d.fim+'.pdf');
 }

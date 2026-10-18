@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   LayoutDashboard, ShoppingBag, TrendingUp, ReceiptText, Target, Package,
   ChartColumnIncreasing, Settings, LogOut, Menu, Plus, ShieldCheck,
-  RefreshCw, AlertCircle, Eye, EyeOff, Sun, Moon
+  RefreshCw, AlertCircle, Eye, EyeOff, Sun, Moon, Trophy, ClipboardCheck, TrendingUpDown
 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import './index.css';
@@ -20,11 +20,13 @@ const percent = n => `${(Number(n)||0).toFixed(1).replace('.', ',')}%`;
 const nav = [
   ['Dashboard',LayoutDashboard], ['Nova Venda',ShoppingBag], ['Evolução do Mês',TrendingUp],
   ['Vendas',ReceiptText], ['Metas',Target], ['Produtos',Package],
-  ['BI Produtos',ChartColumnIncreasing], ['Administração',Settings]
+  ['BI Produtos',ChartColumnIncreasing], ['Ranking Vendedores',Trophy],
+  ['Central de Fechamentos',ClipboardCheck], ['Projeção de Fechamento',TrendingUpDown], ['Administração',Settings]
 ];
 const campoClaro = 'w-full bg-white border border-[#dededb] rounded-xl px-4 py-3 text-[#292929] focus:outline-none focus:border-[#d9a441]';
 const campo = 'w-full bg-[#282828] border border-[#484848] rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d9a441]';
 const ultimoDia = mes => { const [ano,m]=mes.split('-').map(Number); return `${mes}-${String(new Date(ano,m,0).getDate()).padStart(2,'0')}`; };
+const diasUteisEntre=(inicio,fim)=>{if(!inicio||!fim||inicio>fim)return 0;let n=0;const a=new Date(inicio+'T12:00:00'),b=new Date(fim+'T12:00:00');for(let d=new Date(a);d<=b&&n<500;d.setDate(d.getDate()+1)){const dia=d.getDay();if(dia!==0&&dia!==6)n++;}return n;};
 const hoje = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 function Logo({compact=false}){
   const [imagemDisponivel,setImagemDisponivel]=useState(true);
@@ -88,6 +90,7 @@ function App(){
   const [biGerencial,setBiGerencial]=useState(null);
   const [historicoMensal,setHistoricoMensal]=useState(null);
   const [vendasHistoricas,setVendasHistoricas]=useState([]);
+  const [usuarios,setUsuarios]=useState([]),[fechamentos,setFechamentos]=useState([]),[saldos,setSaldos]=useState([]);
   const [carregando,setCarregando]=useState(false),[erroDados,setErroDados]=useState(''),[aviso,setAviso]=useState('');
   const [dataInicial,setDataInicial]=useState(()=>`${hoje().slice(0,7)}-01`),[dataFinal,setDataFinal]=useState(()=>ultimoDia(hoje().slice(0,7)));
   const periodo=(dataFinal||dataInicial||hoje()).slice(0,7);
@@ -157,19 +160,22 @@ function App(){
     if(!perfil||!dataInicial||!dataFinal||dataInicial>dataFinal)return;
     setCarregando(true);setErroDados('');
     // Consultas protegidas pelas políticas RLS do Supabase.
-    const [ru,rp,rm,rv,rbi,rh,rhd]=await Promise.all([
+    const [ru,rp,rm,rv,rbi,rh,rhd,rusr,rfc,rsaldo]=await Promise.all([
       supabase.from('unidades').select('id,nome').order('nome'),
       supabase.from('produtos').select('id,nome,ativo').order('nome'),
       supabase.from('metas').select('id,unidade_id,data_inicio,data_fim,meta_1,meta_2,meta_3,meta_4').order('data_inicio',{ascending:false}).limit(1000),
       supabase.from('vendas').select('id,unidade_id,vendedor_id,produto_id,data_venda,tipo_venda,valor,percentual_comissao,valor_comissao,cliente_nome,placa').gte('data_venda',dataInicial).lte('data_venda',dataFinal).order('data_venda',{ascending:false}).limit(1000),
       periodo==='2026-10' ? supabase.from('bi_gerencial_v2_com_saldos').select('*') : Promise.resolve({data:null,error:null}),
       dataInicial<='2026-09-30'&&dataFinal>='2026-09-01' ? supabase.from('bi_historico_mensal').select('competencia,unidade_id,unidade,realizado,observacoes').eq('competencia',periodo) : Promise.resolve({data:null,error:null}),
-      dataInicial<='2026-09-30'&&dataFinal>='2026-09-01' ? supabase.from('historico_vendas_detalhes').select('id_fonte,data_fonte,unidade_nome,produto,tipo,valor_historico,placa,status_conferencia,conta_meta').eq('competencia',periodo).order('id_fonte').limit(1000) : Promise.resolve({data:[],error:null})
+      dataInicial<='2026-09-30'&&dataFinal>='2026-09-01' ? supabase.from('historico_vendas_detalhes').select('id_fonte,data_fonte,unidade_nome,produto,tipo,valor_historico,placa,status_conferencia,conta_meta').eq('competencia',periodo).order('id_fonte').limit(1000) : Promise.resolve({data:[],error:null}),
+      supabase.from('usuarios').select('id,nome,cargo,status').eq('status','ATIVO').limit(500),
+      supabase.from('fechamentos').select('id,unidade_id,data_inicio,data_fim,status,valor_total,quantidade_vendas,enviado_em,conferido_em,observacoes').lte('data_inicio',dataFinal).gte('data_fim',dataInicial).limit(1000),
+      supabase.from('saldos_iniciais_bi').select('unidade_id,competencia,data_referencia,valor').eq('competencia',periodo).limit(200)
     ]);
-    const falhas=[ru,rp,rm,rv,rbi,rh,rhd].filter(r=>r.error).map(r=>r.error.message);
+    const falhas=[ru,rp,rm,rv,rbi,rh,rhd,rusr,rfc,rsaldo].filter(r=>r.error).map(r=>r.error.message);
     if(falhas.length)setErroDados([...new Set(falhas)].join(' | '));
     else {
-      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);setBiGerencial(periodo==='2026-10'?(rbi.data||[]):null);setHistoricoMensal(dataInicial<='2026-09-30'&&dataFinal>='2026-09-01'?(rh.data||[]):null);setVendasHistoricas(dataInicial<='2026-09-30'&&dataFinal>='2026-09-01'?(rhd.data||[]):[]);
+      setUnidades(ru.data||[]);setProdutos(rp.data||[]);setMetas(rm.data||[]);setVendas(rv.data||[]);setBiGerencial(periodo==='2026-10'?(rbi.data||[]):null);setHistoricoMensal(dataInicial<='2026-09-30'&&dataFinal>='2026-09-01'?(rh.data||[]):null);setVendasHistoricas(dataInicial<='2026-09-30'&&dataFinal>='2026-09-01'?(rhd.data||[]):[]);setUsuarios(rusr.data||[]);setFechamentos(rfc.data||[]);setSaldos(rsaldo.data||[]);
       setForm(f=>({...f,unidade_id:f.unidade_id||(ru.data?.[0]?.id||''),produto_id:f.produto_id||(rp.data?.find(p=>p.ativo)?.id||'')}));
       if((rv.data||[]).length===1000)setAviso('Há pelo menos 1.000 vendas neste período. A consulta está limitada; o total pode estar incompleto.');
     }
@@ -230,6 +236,32 @@ function App(){
   const comparativoBI=useMemo(()=>desempenhoFiltrado.filter(x=>x.temMeta&&x.meta>0).map(x=>({nome:x.nome.replace(' GUARAPUAVA',' GUA.').replace(' LONDRINA',' LON.').replace(' MARINGA',' MAR.'),meta:x.meta,realizado:x.realizado})),[desempenhoFiltrado]);
   const corBarra=valor=>valor>=100?'#4ade80':valor>=50?'#facc15':'#f87171';
   const resumoProdutos=useMemo(()=>produtos.map(p=>{const itens=vendasFiltradas.filter(v=>v.produto_id===p.id);return {nome:p.nome,quantidade:itens.length,total:itens.reduce((s,v)=>s+Number(v.valor||0),0)};}).filter(p=>p.quantidade).sort((a,b)=>b.total-a.total),[vendasFiltradas,produtos,filtroProduto,filtroBusca]);
+  // Ranking: somente vendas reais com vendedor identificado; histórico sem vendedor não participa.
+  const rankingVendedores=useMemo(()=>{
+    const mapa=new Map(usuarios.map(u=>[u.id,{id:u.id,nome:u.nome,cargo:u.cargo,quantidade:0,total:0,comissao:0,unidades:new Set()}]));
+    for(const v of vendasFiltradas){const u=mapa.get(v.vendedor_id);if(!u)continue;u.quantidade++;u.total+=Number(v.valor||0);u.comissao+=Number(v.valor_comissao||0);u.unidades.add(mapaUnidades[v.unidade_id]||'—');}
+    return [...mapa.values()].filter(u=>u.quantidade>0).sort((a,b)=>b.total-a.total);
+  },[usuarios,vendasFiltradas,unidades]);
+  // Central: fechamentos efetivamente enviados e fechamento mensal histórico validado.
+  const centralFechamentos=useMemo(()=>unidades.filter(u=>unidadeOk(u.nome)&&buscaOk(u.nome)).map(u=>{
+    const docs=fechamentos.filter(f=>f.unidade_id===u.id).sort((a,b)=>(b.enviado_em||'').localeCompare(a.enviado_em||''));
+    const validado=(historicoMensal||[]).find(h=>h.unidade_id===u.id);
+    const ultimo=docs[0];
+    return {nome:u.nome,ultimo,validado,status:ultimo?(ultimo.conferido_em?'CONFERIDO':ultimo.status||'ENVIADO'):validado?'HISTÓRICO VALIDADO':'SEM ENVIO REGISTRADO'};
+  }),[unidades,fechamentos,historicoMensal,filtroUnidade,filtroBusca]);
+  // Projeção indicativa baseada exclusivamente em saldos datados; não pressupõe atualizações diárias.
+  const projecoes=useMemo(()=>desempenhoFiltrado.map(x=>{
+    const m=metasAtivas.get(x.id);
+    const saldo=saldos.find(a=>a.unidade_id===x.id);
+    const inicio=x.inicio||m?.data_inicio,fim=x.fim||m?.data_fim;
+    const referencia=saldo?.data_referencia;
+    const diasTotal=diasUteisEntre(inicio,fim);
+    const diasDecorridos=referencia?diasUteisEntre(inicio,referencia<fim?referencia:fim):0;
+    const realizado=Number(x.realizado||0);
+    const apto=!!(mesInteiro&&saldo&&inicio&&fim&&diasTotal>0&&diasDecorridos>0&&x.temMeta);
+    const projecao=apto?realizado/diasDecorridos*diasTotal:null;
+    return {...x,inicio,fim,referencia,diasTotal,diasDecorridos,projecao,diferenca:projecao===null?null:projecao-x.meta};
+  }),[desempenhoFiltrado,saldos,metasAtivas,mesInteiro]);
   async function salvar(e){
     e.preventDefault();setAviso('');
     const valor=Number(form.valor);
@@ -285,6 +317,9 @@ function App(){
       {pagina==='Produtos'&&<Caixa titulo={`Produtos cadastrados (${produtos.length})`}><Tabela cabecalho={['Produto','Situação']} linhas={produtosFiltrados.map(p=>[p.nome,p.ativo?'ATIVO':'INATIVO'])}/></Caixa>}
       {pagina==='Evolução do Mês'&&<Caixa titulo="Evolução de vendas no mês">{evolucao.length?<div className="h-80"><ResponsiveContainer width="100%" height="100%"><AreaChart data={evolucao}><CartesianGrid stroke="#eeeeea" strokeDasharray="3 3"/><XAxis dataKey="data" stroke="#9a9a96"/><YAxis stroke="#9a9a96"/><Tooltip formatter={v=>brl(v)} contentStyle={{background:'#fff',border:'1px solid #ecece8'}}/><Area dataKey="acumulado" type="monotone" stroke="#dca443" fill="#e8b75b" fillOpacity={0.2}/></AreaChart></ResponsiveContainer></div>:<p className="text-[#8a8a86]">Sem vendas registradas no período.</p>}</Caixa>}
       {pagina==='BI Produtos'&&<Caixa titulo="BI de produtos"><Tabela cabecalho={['Produto','Quantidade','Faturamento']} linhas={resumoProdutos.map(p=>[p.nome,p.quantidade,brl(p.total)])}/></Caixa>}
+      {pagina==='Ranking Vendedores'&&<><div className="flex items-center justify-between"><h2 className="text-2xl font-semibold">Ranking de vendedores</h2><span className="text-xs text-[#858580]">Vendas individuais confirmadas</span></div><Caixa titulo="Desempenho individual">{rankingVendedores.length?<Tabela cabecalho={['Posição','Vendedor','Unidade(s)','Vendas','Faturamento','Ticket médio','Comissão registrada']} linhas={rankingVendedores.map((v,i)=>[i<3?['🥇','🥈','🥉'][i]:i+1,v.nome,[...v.unidades].join(', '),v.quantidade,brl(v.total),brl(v.total/v.quantidade),brl(v.comissao)])}/>:<p className="text-sm text-[#858580]">Ainda não há vendas individuais confirmadas com vendedor identificado neste período. Os 748 lançamentos históricos de setembro estão em conferência e não entram no ranking.</p>}</Caixa></>}
+      {pagina==='Central de Fechamentos'&&<><div className="flex items-center justify-between"><h2 className="text-2xl font-semibold">Central de fechamentos</h2><span className="text-xs text-[#858580]">Acompanhamento por unidade</span></div><div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{card('Unidades acompanhadas',centralFechamentos.length,'ouro')}{card('Enviados no período',centralFechamentos.filter(x=>x.ultimo).length,'azul')}{card('Sem envio registrado',centralFechamentos.filter(x=>!x.ultimo&&!x.validado).length,'coral')}</div><Caixa titulo="Situação dos fechamentos"><Tabela cabecalho={['Unidade','Situação','Período registrado','Valor informado','Enviado em']} linhas={centralFechamentos.map(x=>[x.nome,x.status,x.ultimo?`${x.ultimo.data_inicio} a ${x.ultimo.data_fim}`:x.validado?'Setembro/2026':'—',x.ultimo?brl(x.ultimo.valor_total):x.validado?brl(x.validado.realizado):'—',x.ultimo?.enviado_em?new Date(x.ultimo.enviado_em).toLocaleString('pt-BR'):'—'])}/><p className="text-xs text-[#858580] mt-4">“Sem envio registrado” significa apenas que não há documento nesta base, não que a loja deixou de enviar por outros canais. Histórico validado é separado de fechamento operacional.</p></Caixa></>}
+      {pagina==='Projeção de Fechamento'&&<><div className="flex items-center justify-between"><h2 className="text-2xl font-semibold">Projeção de fechamento</h2><span className="text-xs text-[#858580]">Estimativa pelo ritmo registrado</span></div><Caixa titulo="Projeção por unidade"><Tabela cabecalho={['Unidade','Meta','Realizado','Data da base','Dias úteis decorridos','Projeção estimada','Diferença para meta']} linhas={projecoes.map(x=>[x.nome,x.temMeta?brl(x.meta):'—',brl(x.realizado),x.referencia||'Sem saldo datado',x.projecao===null?'—':`${x.diasDecorridos} de ${x.diasTotal}`,x.projecao===null?'Sem dados suficientes':brl(x.projecao),x.diferenca===null?'—':<span className={x.diferenca>=0?'text-emerald-600 font-semibold':'text-rose-600 font-semibold'}>{x.diferenca>=0?'+':''}{brl(x.diferenca)}</span>])}/><p className="text-xs text-[#858580] mt-4">Projeção indicativa = realizado ÷ dias úteis decorridos até a data do saldo × dias úteis do ciclo. Não considera feriados, sazonalidade nem vendas futuras. Quando não há saldo datado ou o período é parcial, a estimativa fica indisponível. O resultado não altera metas nem faturamento oficial.</p></Caixa></>}
       {pagina==='Administração'&&<Caixa titulo="Conta e segurança"><div className="flex gap-3"><ShieldCheck className="text-[#ba852c] shrink-0"/><div><b>{perfil.nome} · {perfil.cargo}</b><p className="text-[#8a8a86] mt-3">Sessão autenticada pelo Supabase. As consultas e gravações respeitam as políticas RLS configuradas no banco.</p><p className="text-[#8a8a86] mt-3">Cadastro de vendedores, vinculação às unidades e gestão de fechamentos serão implementados na próxima etapa. Não utilize o SQL Editor para criar senhas ou usuários diretamente em auth.users.</p><p className="text-[#ba852c] mt-3">Monitor gerencial LACC V2.</p></div></div></Caixa>}
       
     </main></div>

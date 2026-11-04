@@ -65,7 +65,7 @@ function App() {
       .then((data) => {
         if (Array.isArray(data)) {
           setProdutosLista(data);
-        } else if (data.error) {
+        } else if (data && data.error) {
           setErroProdutos(data.error);
         } else {
           setProdutosLista([]);
@@ -109,6 +109,7 @@ function App() {
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     setIsAuthenticated(true);
+    setActiveTab('nova-venda');
   };
 
   const handleSubmit = (e) => {
@@ -185,8 +186,8 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex">
-      {/* Sidebar Completa */}
-      <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col justify-between p-4">
+      {/* Sidebar Fixa */}
+      <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col justify-between p-4 flex-shrink-0">
         <div>
           <div className="flex items-center gap-3 px-2 py-4 mb-6 border-b border-neutral-800">
             <img src="/lacc-logo.jpg" alt="Logo LACC" className="h-10 w-10 rounded-full object-cover border border-amber-500/40" />
@@ -262,10 +263,10 @@ function App() {
         </div>
       </aside>
 
-      {/* Conteúdo Principal */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      {/* Conteúdo Principal Responsivo */}
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto">
         {activeTab === 'nova-venda' && (
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="w-full max-w-5xl space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <PlusCircle className="text-amber-400" /> Registrar Nova Venda
@@ -289,9 +290,9 @@ function App() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-6 shadow-xl">
               {/* Seção 1: Informações Gerais */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Data *</label>
                   <input 
@@ -401,7 +402,7 @@ function App() {
               </div>
 
               {/* Seção 3: Atendimento e Veículo */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-neutral-800 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border-t border-neutral-800 pt-4">
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Consultor *</label>
                   <input 
@@ -493,7 +494,7 @@ function App() {
 
             {/* Tabela de Lançamentos da Sessão */}
             {vendasSessao.length > 0 && (
-              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4 shadow-xl">
                 <h3 className="text-lg font-bold text-white">Lançamentos da Sessão</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm text-neutral-300">
@@ -529,9 +530,10 @@ function App() {
         )}
 
         {activeTab !== 'nova-venda' && (
-          <div className="flex flex-col items-center justify-center h-full text-neutral-500 py-20">
-            <Settings size={48} className="mb-2 stroke-1" />
-            <p className="text-sm">Módulo "{activeTab.toUpperCase()}" em desenvolvimento na V2.</p>
+          <div className="w-full max-w-5xl flex flex-col items-center justify-center pt-24 text-neutral-500">
+            <Settings size={56} className="mb-4 stroke-1 text-amber-500/50" />
+            <h3 className="text-lg font-semibold text-neutral-300 mb-1">Módulo "{activeTab.toUpperCase()}"</h3>
+            <p className="text-xs text-neutral-500">Esta funcionalidade está em desenvolvimento na V2.</p>
           </div>
         )}
       </main>

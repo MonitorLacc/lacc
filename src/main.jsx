@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css'; // Importante para carregar os estilos do Tailwind
+import './index.css';
 import { 
   TrendingUp, 
   PlusCircle, 

@@ -1,40 +1,26 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
 import { 
   TrendingUp, 
-  DollarSign, 
-  ShoppingBag, 
-  Users, 
   PlusCircle, 
-  BarChart2, 
-  Target, 
+  ShoppingBag, 
   Package, 
-  PieChart, 
-  Settings,
-  CheckCircle,
-  XCircle,
-  RefreshCw,
-  LogOut
+  CheckCircle, 
+  Settings 
 } from 'lucide-react';
 
 const API_PRODUTOS_URL = "https://script.google.com/macros/s/AKfycbyWJYG3tUNFRmC97A-oQXeBpnV3EYpLbt6DUn4zzh0vEfKw2tnYMZknsk9_6TVJ2xSoKg/exec";
 
-export default function App() {
+function App() {
   const [activeTab, setActiveTab] = useState('nova-venda');
 
-  // Estados do Formulário Nova Venda
   const [formData, setFormData] = useState({
     data: new Date().toISOString().split('T')[0],
     loja: '',
-    marca: '',
-    tipoVenda: '',
+    consultor: '',
     produto: '',
     quantidade: 1,
-    valorUnitario: '',
-    consultor: '',
-    veiculo: '',
-    placaChassi: '',
-    ordemServico: '',
-    observacoes: ''
+    valorUnitario: ''
   });
 
   const [produtosLista, setProdutosLista] = useState([]);
@@ -43,7 +29,6 @@ export default function App() {
   const [vendasSessao, setVendasSessao] = useState([]);
   const [sucessoMsg, setSucessoMsg] = useState(false);
 
-  // Busca lista de produtos do Google Sheets via Web App
   useEffect(() => {
     fetch(API_PRODUTOS_URL)
       .then((res) => {
@@ -79,16 +64,10 @@ export default function App() {
     setFormData({
       data: new Date().toISOString().split('T')[0],
       loja: '',
-      marca: '',
-      tipoVenda: '',
+      consultor: '',
       produto: '',
       quantidade: 1,
-      valorUnitario: '',
-      consultor: '',
-      veiculo: '',
-      placaChassi: '',
-      ordemServico: '',
-      observacoes: ''
+      valorUnitario: ''
     });
   };
 
@@ -177,18 +156,10 @@ export default function App() {
               </p>
             </div>
 
-            {/* Aviso de Demonstração */}
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
-              <span className="font-bold uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">Aviso</span>
-              <span>
-                Esta é uma versão de testes (V2). Os lançamentos efetuados nesta página ficam salvos temporariamente na sessão local do seu navegador e não alteram a planilha oficial da V1.
-              </span>
-            </div>
-
             {sucessoMsg && (
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-3">
                 <CheckCircle size={20} />
-                <span>Venda registrada com sucesso na demonstração!</span>
+                <span>Venda registrada com sucesso!</span>
               </div>
             )}
 
@@ -237,7 +208,6 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Campo Seletor Dinâmico de Produtos da V1 */}
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Produto ou Serviço *</label>
                   <select 
@@ -314,7 +284,6 @@ export default function App() {
               </div>
             </form>
 
-            {/* Tabela de Vendas Registradas na Sessão */}
             {vendasSessao.length > 0 && (
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4">
                 <h3 className="text-lg font-bold text-white">Lançamentos da Sessão</h3>
@@ -361,3 +330,10 @@ export default function App() {
     </div>
   );
 }
+
+// Renderização direta no DOM
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

@@ -17,7 +17,6 @@ import {
 
 const API_PRODUTOS_URL = "https://script.google.com/macros/s/AKfycbyWJYG3tUNFRmC97A-oQXeBpnV3EYpLbt6DUn4zzh0vEfKw2tnYMZknsk9_6TVJ2xSoKg/exec";
 
-// Lojas Oficiais da aba CONFIG_LOJAS_VENDAS
 const LOJAS_OFICIAIS = [
   "COMERCIAL O. GUARAPUAVA",
   "FIAT/JEEP GUARAPUAVA",
@@ -135,7 +134,6 @@ function App() {
     }, 4000);
   };
 
-  // Tela de Login
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4 font-sans text-neutral-100">
@@ -186,7 +184,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex">
-      {/* Sidebar Fixa */}
+      {/* Sidebar */}
       <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col justify-between p-4 flex-shrink-0">
         <div>
           <div className="flex items-center gap-3 px-2 py-4 mb-6 border-b border-neutral-800">
@@ -263,7 +261,7 @@ function App() {
         </div>
       </aside>
 
-      {/* Conteúdo Principal Responsivo */}
+      {/* Conteúdo Principal */}
       <main className="flex-1 p-6 md:p-8 overflow-y-auto">
         {activeTab === 'nova-venda' && (
           <div className="w-full max-w-5xl space-y-6">
@@ -291,7 +289,6 @@ function App() {
             )}
 
             <form onSubmit={handleSubmit} className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-6 shadow-xl">
-              {/* Seção 1: Informações Gerais */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Data *</label>
@@ -349,7 +346,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Seção 2: Produto e Valores */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-neutral-800 pt-4">
                 <div className="md:col-span-1">
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Produto ou Serviço *</label>
@@ -401,7 +397,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Seção 3: Atendimento e Veículo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 border-t border-neutral-800 pt-4">
                 <div>
                   <label className="block text-xs font-medium text-neutral-400 mb-1">Consultor *</label>
@@ -453,7 +448,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Observações */}
               <div>
                 <label className="block text-xs font-medium text-neutral-400 mb-1">Observações</label>
                 <textarea 
@@ -466,7 +460,6 @@ function App() {
                 ></textarea>
               </div>
 
-              {/* Totalizador */}
               <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex justify-between items-center">
                 <span className="text-sm font-medium text-neutral-400">Total Previsto:</span>
                 <span className="text-xl font-bold text-amber-400">
@@ -474,7 +467,6 @@ function App() {
                 </span>
               </div>
 
-              {/* Botões de Ação */}
               <div className="flex justify-end gap-3 pt-2">
                 <button 
                   type="button" 
@@ -492,7 +484,6 @@ function App() {
               </div>
             </form>
 
-            {/* Tabela de Lançamentos da Sessão */}
             {vendasSessao.length > 0 && (
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4 shadow-xl">
                 <h3 className="text-lg font-bold text-white">Lançamentos da Sessão</h3>
@@ -530,7 +521,7 @@ function App() {
         )}
 
         {activeTab !== 'nova-venda' && (
-          <div className="w-full max-w-5xl flex flex-col items-center justify-center pt-24 text-neutral-500">
+          <div className="w-full max-w-5xl flex flex-col items-center justify-center pt-20 text-neutral-500">
             <Settings size={56} className="mb-4 stroke-1 text-amber-500/50" />
             <h3 className="text-lg font-semibold text-neutral-300 mb-1">Módulo "{activeTab.toUpperCase()}"</h3>
             <p className="text-xs text-neutral-500">Esta funcionalidade está em desenvolvimento na V2.</p>

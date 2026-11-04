@@ -17,6 +17,7 @@ import {
 
 const API_PRODUTOS_URL = "https://script.google.com/macros/s/AKfycbyWJYG3tUNFRmC97A-oQXeBpnV3EYpLbt6DUn4zzh0vEfKw2tnYMZknsk9_6TVJ2xSoKg/exec";
 
+// Lojas Oficiais da aba CONFIG_LOJAS_VENDAS
 const LOJAS_OFICIAIS = [
   "COMERCIAL O. GUARAPUAVA",
   "FIAT/JEEP GUARAPUAVA",
@@ -30,6 +31,30 @@ const LOJAS_OFICIAIS = [
   "LOVAT MARINGA",
   "PSA",
   "IATA"
+];
+
+// Produtos Oficiais da aba CONFIG_PRODUTOS_VENDAS (Lista de reserva caso a API falhe)
+const PRODUTOS_DEFAULT = [
+  { nome: "LAVAGEM COM CERA" },
+  { nome: "COATING CERÂMICO" },
+  { nome: "COATING DE PLÁSTICOS" },
+  { nome: "PRIME" },
+  { nome: "HIGIENIZAÇÃO INTERNA" },
+  { nome: "POLIMENTO" },
+  { nome: "PPF" },
+  { nome: "JET CERA" },
+  { nome: "REVITALIZAÇÃO DE MOTOR" },
+  { nome: "LAVAGEM BACTERICIDA" },
+  { nome: "HIDRATAÇÃO COURO" },
+  { nome: "HIDRORREPELENCIA PARABRISA" },
+  { nome: "DESCONTAMINAÇÃO DE VIDROS" },
+  { nome: "PROTEÇÃO DE PINTURA M" },
+  { nome: "BLINDAGEM DE COURO" },
+  { nome: "4 EM 1 CERAMICA" },
+  { nome: "KIT SEMI NOVO" },
+  { nome: "HIGIENIZAÇÃO INTERNA SEMI NOVO" },
+  { nome: "POLIMENTO SEMI NOVO" },
+  { nome: "REMOÇÃO DE PELICULA" }
 ];
 
 function App() {
@@ -52,7 +77,7 @@ function App() {
     observacoes: ''
   });
 
-  const [produtosLista, setProdutosLista] = useState([]);
+  const [produtosLista, setProdutosLista] = useState(PRODUTOS_DEFAULT);
   const [carregandoProdutos, setCarregandoProdutos] = useState(true);
   const [erroProdutos, setErroProdutos] = useState(null);
   const [vendasSessao, setVendasSessao] = useState([]);
@@ -62,18 +87,17 @@ function App() {
     fetch(API_PRODUTOS_URL)
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           setProdutosLista(data);
+          setErroProdutos(null);
         } else if (data && data.error) {
-          setErroProdutos(data.error);
-        } else {
-          setProdutosLista([]);
+          console.warn("Aviso API:", data.error);
         }
         setCarregandoProdutos(false);
       })
       .catch((err) => {
-        console.error("Erro ao buscar produtos:", err);
-        setErroProdutos("Não foi possível carregar a lista oficial de produtos.");
+        console.error("Erro ao buscar produtos da API:", err);
+        // Mantém a lista default configurada para o usuário conseguir trabalhar
         setCarregandoProdutos(false);
       });
   }, []);
@@ -353,13 +377,10 @@ function App() {
                     name="produto" 
                     value={formData.produto} 
                     onChange={handleInputChange}
-                    disabled={carregandoProdutos}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
                     required
                   >
-                    <option value="">
-                      {carregandoProdutos ? "Carregando cadastro oficial..." : "Selecione um produto ou serviço"}
-                    </option>
+                    <option value="">Selecione um produto ou serviço</option>
                     {produtosLista.map((item, idx) => (
                       <option key={idx} value={item.nome || item.produto || item.id}>
                         {item.nome || item.produto || item.id}

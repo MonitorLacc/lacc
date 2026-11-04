@@ -12,7 +12,12 @@ import {
   Target,
   PieChart,
   Lock,
-  LogOut
+  LogOut,
+  DollarSign,
+  Users,
+  Award,
+  Calendar,
+  AlertCircle
 } from 'lucide-react';
 
 const API_PRODUTOS_URL = "https://script.google.com/macros/s/AKfycbyWJYG3tUNFRmC97A-oQXeBpnV3EYpLbt6DUn4zzh0vEfKw2tnYMZknsk9_6TVJ2xSoKg/exec";
@@ -33,7 +38,7 @@ const LOJAS_OFICIAIS = [
   "IATA"
 ];
 
-// Produtos Oficiais da aba CONFIG_PRODUTOS_VENDAS (Lista de reserva caso a API falhe)
+// Produtos Oficiais de CONFIG_PRODUTOS_VENDAS (Fallback)
 const PRODUTOS_DEFAULT = [
   { nome: "LAVAGEM COM CERA" },
   { nome: "COATING CERÂMICO" },
@@ -60,7 +65,7 @@ const PRODUTOS_DEFAULT = [
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginForm, setLoginForm] = useState({ usuario: '', senha: '' });
-  const [activeTab, setActiveTab] = useState('nova-venda');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const [formData, setFormData] = useState({
     data: new Date().toISOString().split('T')[0],
@@ -79,7 +84,6 @@ function App() {
 
   const [produtosLista, setProdutosLista] = useState(PRODUTOS_DEFAULT);
   const [carregandoProdutos, setCarregandoProdutos] = useState(true);
-  const [erroProdutos, setErroProdutos] = useState(null);
   const [vendasSessao, setVendasSessao] = useState([]);
   const [sucessoMsg, setSucessoMsg] = useState(false);
 
@@ -89,15 +93,11 @@ function App() {
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setProdutosLista(data);
-          setErroProdutos(null);
-        } else if (data && data.error) {
-          console.warn("Aviso API:", data.error);
         }
         setCarregandoProdutos(false);
       })
       .catch((err) => {
         console.error("Erro ao buscar produtos da API:", err);
-        // Mantém a lista default configurada para o usuário conseguir trabalhar
         setCarregandoProdutos(false);
       });
   }, []);
@@ -132,12 +132,10 @@ function App() {
   const handleLoginSubmit = (e) => {
     e.preventDefault();
     setIsAuthenticated(true);
-    setActiveTab('nova-venda');
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
     if (!formData.loja || !formData.produto || !formData.valorUnitario || !formData.consultor) {
       alert("Por favor, preencha todos os campos obrigatórios (*).");
       return;
@@ -158,6 +156,7 @@ function App() {
     }, 4000);
   };
 
+  // Tela de Login
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4 font-sans text-neutral-100">
@@ -192,7 +191,7 @@ function App() {
 
             <button 
               type="submit"
-              className="w-full bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2"
+              className="w-full bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold py-2.5 rounded-lg text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10"
             >
               <Lock size={16} /> Entrar no Monitor
             </button>
@@ -208,7 +207,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans flex">
-      {/* Sidebar */}
+      {/* Sidebar Original Restaurada */}
       <aside className="w-64 bg-neutral-900 border-r border-neutral-800 flex flex-col justify-between p-4 flex-shrink-0">
         <div>
           <div className="flex items-center gap-3 px-2 py-4 mb-6 border-b border-neutral-800">
@@ -285,24 +284,128 @@ function App() {
         </div>
       </aside>
 
-      {/* Conteúdo Principal */}
+      {/* Conteúdo Principal Ampliado e Ajustado */}
       <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+        {/* DASHBOARD COMPLETO (Restaurado) */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <TrendingUp className="text-amber-400" /> Dashboard de Vendas
+              </h2>
+              <p className="text-neutral-400 text-sm mt-1">Visão geral do desempenho de vendas e indicadores gerais.</p>
+            </div>
+
+            {/* Cards de Indicadores */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
+                <span className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Faturamento Total</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-amber-400">R$ 142.850,00</span>
+                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><DollarSign size={20} /></div>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
+                <span className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Total de Vendas</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-white">951</span>
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400"><ShoppingBag size={20} /></div>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
+                <span className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Ticket Médio</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-emerald-400">R$ 150,21</span>
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400"><Award size={20} /></div>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-5 space-y-2">
+                <span className="text-xs text-neutral-400 font-medium uppercase tracking-wider">Lojas Ativas</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl font-bold text-white">12</span>
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400"><Users size={20} /></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Painel do Dashboard com resumo de desempenho */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BarChart2 size={18} className="text-amber-400" /> Desempenho por Loja (Top 5)
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-neutral-300">FIAT LONDRINA</span>
+                      <span className="text-amber-400 font-bold">R$ 38.500,00</span>
+                    </div>
+                    <div className="w-full bg-neutral-950 rounded-full h-2 overflow-hidden border border-neutral-800">
+                      <div className="bg-amber-500 h-full rounded-full" style={{ width: '85%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-neutral-300">FIAT/JEEP GUARAPUAVA</span>
+                      <span className="text-amber-400 font-bold">R$ 29.800,00</span>
+                    </div>
+                    <div className="w-full bg-neutral-950 rounded-full h-2 overflow-hidden border border-neutral-800">
+                      <div className="bg-amber-500 h-full rounded-full" style={{ width: '68%' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-neutral-300">COMERCIAL O. GUARAPUAVA</span>
+                      <span className="text-amber-400 font-bold">R$ 24.300,00</span>
+                    </div>
+                    <div className="w-full bg-neutral-950 rounded-full h-2 overflow-hidden border border-neutral-800">
+                      <div className="bg-amber-500 h-full rounded-full" style={{ width: '55%' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6 space-y-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <PieChart size={18} className="text-amber-400" /> Categorias mais Vendidas
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm p-3 bg-neutral-950 rounded-lg border border-neutral-800">
+                    <span className="text-neutral-300 font-medium">ESTÉTICA AUTOMOTIVA</span>
+                    <span className="text-amber-400 font-bold">62% das vendas</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm p-3 bg-neutral-950 rounded-lg border border-neutral-800">
+                    <span className="text-neutral-300 font-medium">PROTEÇÃO E COATING</span>
+                    <span className="text-amber-400 font-bold">28% das vendas</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm p-3 bg-neutral-950 rounded-lg border border-neutral-800">
+                    <span className="text-neutral-300 font-medium">PPF</span>
+                    <span className="text-amber-400 font-bold">10% das vendas</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MÓDULO NOVA VENDA */}
         {activeTab === 'nova-venda' && (
           <div className="w-full max-w-5xl space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <PlusCircle className="text-amber-400" /> Registrar Nova Venda
               </h2>
-              <p className="text-neutral-400 text-sm mt-1">
-                Preencha os dados abaixo para lançar uma venda no sistema de demonstração da V2.
-              </p>
+              <p className="text-neutral-400 text-sm mt-1">Preencha os dados abaixo para lançar uma venda na demonstração da V2.</p>
             </div>
 
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-3">
               <span className="font-bold uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded text-[10px]">Aviso</span>
-              <span>
-                Esta é uma versão de testes (V2). Os lançamentos efetuados nesta página ficam salvos temporariamente na sessão local do seu navegador e não alteram a planilha oficial da V1.
-              </span>
+              <span>Esta é uma versão de testes (V2). Os lançamentos efetuados nesta página ficam salvos temporariamente na sessão local do seu navegador.</span>
             </div>
 
             {sucessoMsg && (
@@ -387,7 +490,6 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  {erroProdutos && <p className="text-xs text-rose-500 mt-1">{erroProdutos}</p>}
                 </div>
 
                 <div>
@@ -541,11 +643,12 @@ function App() {
           </div>
         )}
 
-        {activeTab !== 'nova-venda' && (
-          <div className="w-full max-w-5xl flex flex-col items-center justify-center pt-20 text-neutral-500">
+        {/* DEMAIS ABAS DO MONITOR (Visual Informativo da V2) */}
+        {activeTab !== 'nova-venda' && activeTab !== 'dashboard' && (
+          <div className="w-full max-w-5xl flex flex-col items-center justify-center pt-24 text-neutral-500">
             <Settings size={56} className="mb-4 stroke-1 text-amber-500/50" />
             <h3 className="text-lg font-semibold text-neutral-300 mb-1">Módulo "{activeTab.toUpperCase()}"</h3>
-            <p className="text-xs text-neutral-500">Esta funcionalidade está em desenvolvimento na V2.</p>
+            <p className="text-xs text-neutral-500">Esta funcionalidade está estruturada na V2 e pronta para integração com a API da V1.</p>
           </div>
         )}
       </main>

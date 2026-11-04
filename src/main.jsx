@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css'; // Importante para carregar os estilos do Tailwind
 import { 
   TrendingUp, 
   PlusCircle, 
@@ -31,10 +32,7 @@ function App() {
 
   useEffect(() => {
     fetch(API_PRODUTOS_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error("Falha ao carregar produtos");
-        return res.json();
-      })
+      .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
           setProdutosLista(data);
@@ -331,7 +329,6 @@ function App() {
   );
 }
 
-// Renderização direta no DOM
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
